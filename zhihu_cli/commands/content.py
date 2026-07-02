@@ -359,7 +359,7 @@ def feeds(limit: int, comment_limit: int):
     with _get_client() as client:
         try:
             results = client.get_feed(limit=limit)
-            data = results.get("data", [])
+            data = results.get("data", [])[:limit]
         except Exception as e:
             print_error(f"Failed to fetch feed: {e}")
             sys.exit(1)
