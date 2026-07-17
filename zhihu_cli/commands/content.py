@@ -23,6 +23,7 @@ from ..display import (
     print_html_content,
     print_info,
     strip_html,
+    truncate,
 )
 
 logger = logging.getLogger(__name__)
@@ -206,17 +207,27 @@ def question(question_id: int, as_json: bool):
 
 @click.command()
 @click.argument("question_id", type=int)
-@click.option("-l", "--limit", default=5, help="Number of answers", show_default=True)
+@click.option("-l", "--limit", default=5, help="Answers per page", show_default=True)
+@click.option("-p", "--page", "page", default=1, type=int, help="Page number", show_default=True)
 @click.option("--json", "as_json", is_flag=True, help="Output raw JSON")
 @click.option("--sort", "sort_by", default="default",
               type=click.Choice(["default", "created"]),
               help="Sort order")
-def answers(question_id: int, limit: int, as_json: bool, sort_by: str):
+def answers(question_id: int, limit: int, page: int, as_json: bool, sort_by: str):
     """List answers for a question."""
+    if page < 1:
+        print_error("Page number must be >= 1")
+        sys.exit(1)
+
+    offset = (page - 1) * limit
+
     with _get_client() as client:
         try:
-            results = client.get_question_answers(question_id, limit=limit, sort_by=sort_by)
+            results = client.get_question_answers(
+                question_id, offset=offset, limit=limit, sort_by=sort_by,
+            )
             data = results.get("data", [])
+            paging = results.get("paging", {})
         except Exception as e:
             print_error(f"Failed to fetch answers: {e}")
             sys.exit(1)
@@ -229,12 +240,41 @@ def answers(question_id: int, limit: int, as_json: bool, sort_by: str):
             print_info("No answers yet")
             return
 
-        console.print()
-        console.print(f"[title]  Answers — Q{question_id}  [/title]")
+        # Cache answer data for `zhihu pick`
+        try:
+            FEED_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            FEED_CACHE_FILE.write_text(json.dumps(data, ensure_ascii=False))
+        except Exception as e:
+            logger.warning("Failed to cache answers: %s", e)
+
         console.print()
 
-        for i, ans in enumerate(data, 1):
-            print_answer_card(i, ans)
+        # Get question title from first answer for the table header
+        q_title = strip_html(data[0].get("question", {}).get("title", ""))
+        table_title = f" {q_title} " if q_title else f" Answers — Q{question_id} "
+        table = make_table(table_title)
+        table.add_column("#", style="dim", width=4)
+        table.add_column("ID", style="dim", min_width=12)
+        table.add_column("Excerpt", ratio=1)
+        table.add_column("Author", width=14)
+        table.add_column("Upvotes", width=10, justify="right")
+
+        for idx, ans in enumerate(data, 1):
+            ans_id = str(ans.get("id", "—"))
+            excerpt = strip_html(ans.get("excerpt", ans.get("content", "—")))
+            author = ans.get("author", {}).get("name", "Anonymous")
+            upvotes = format_count(ans.get("voteup_count", 0))
+            table.add_row(str(idx), ans_id, truncate(excerpt, 80), author, f"[bold]{upvotes}[/bold]")
+
+        console.print(table)
+        console.print()
+
+        # Pagination info
+        is_end = paging.get("is_end", True)
+        if not is_end:
+            print_hint(f"Page {page} — use --page {page + 1} for more, `zhihu pick <number>` to view")
+        else:
+            print_info(f"Page {page} — no more")
 
         console.print()
 
@@ -404,20 +444,20 @@ def feed(limit: int, as_json: bool):
 @click.command()
 @click.argument("index", type=int)
 def pick(index: int):
-    """View an answer from the last feed list by number."""
+    """View an answer from the last feed or answers list by number."""
     cache_file = FEED_CACHE_FILE
     if not cache_file.exists():
-        print_error("No cached feed — run `zhihu feed` first")
+        print_error("No cached data — run `zhihu feed` or `zhihu answers` first")
         sys.exit(1)
 
     try:
         data = json.loads(cache_file.read_text())
     except Exception as e:
-        print_error(f"Failed to read feed cache: {e}")
+        print_error(f"Failed to read cache: {e}")
         sys.exit(1)
 
     if not data:
-        print_info("Feed cache is empty")
+        print_info("Cache is empty")
         return
 
     if index < 1 or index > len(data):
@@ -425,9 +465,11 @@ def pick(index: int):
         sys.exit(1)
 
     item = data[index - 1]
-    target = item.get("target", {})
-    item_type = target.get("type", "—")
-    item_id = str(target.get("id", "—"))
+
+    # Handle both feed format (item → target → {id, type}) and answers format (item → {id})
+    target = item.get("target", item)
+    item_id = target.get("id") or item.get("id")
+    item_type = target.get("type") or item.get("type", "answer")
 
     if item_type != "answer":
         print_error(f"Item #{index} is a '{item_type}', not an answer")
@@ -435,7 +477,7 @@ def pick(index: int):
 
     with _get_client() as client:
         try:
-            ans = client.get_answer(item_id)
+            ans = client.get_answer(str(item_id))
         except Exception as e:
             print_error(f"Failed to fetch answer: {e}")
             sys.exit(1)

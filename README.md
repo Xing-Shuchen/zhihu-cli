@@ -29,7 +29,7 @@
 | 分类       | 命令                                     | 说明                           |
 |------------|------------------------------------------|--------------------------------|
 | Auth       | login, logout, status, whoami            | 登录、退出、状态检查、查看资料 |
-| Read       | search, hot, question, answer, pick      | 搜索、热榜、问题详情、回答详情、从 Feed 列表选择回答 |
+| Read       | search, hot, question, answer, pick      | 搜索、热榜、问题详情、回答详情、从缓存列表选择回答 |
 | Users      | user, user-answers, user-articles        | 查看资料、回答列表、文章列表   |
 | Social     | followers, following                     | 查看粉丝、关注列表             |
 | Feed       | feed, feeds, topic                       | 推荐 Feed、推荐+评论、话题详情 |
@@ -139,6 +139,19 @@ zhihu answer <answer_id> -c
 zhihu answer <answer_id> -c -l 5
 ```
 
+### 问题回答列表
+
+```bash
+# 列出问题的回答（表格预览，带编号）
+zhihu answers <question_id>
+zhihu answers <question_id> -l 10         # 每页 10 条
+zhihu answers <question_id> -p 2          # 第 2 页
+zhihu answers <question_id> -p 2 -l 3     # 第 2 页，每页 3 条
+
+# 从表格预览中选择回答查看（无需复制 ID）
+zhihu pick 3
+```
+
 ### 用户
 
 ```bash
@@ -164,7 +177,7 @@ zhihu following <url_token>
 zhihu feed
 zhihu feed --limit 5
 
-# 从最近一次 feed 缓存中按编号查看回答（无需复制 ID）
+# 从最近一次 feed 或 answers 缓存中按编号查看回答（无需复制 ID）
 zhihu pick 3
 
 # 推荐 + 回答内容 + 评论
