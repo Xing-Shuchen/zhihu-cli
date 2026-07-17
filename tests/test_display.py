@@ -11,6 +11,8 @@ from zhihu_cli.display import (
     ZHIHU_THEME,
     format_count,
     format_stats_line,
+    format_timestamp,
+    html_to_rich,
     make_kv_table,
     make_table,
     strip_html,
@@ -200,3 +202,158 @@ class TestTheme:
     def test_theme_has_required_styles(self):
         for style_name in ["info", "success", "warning", "error", "title"]:
             assert style_name in ZHIHU_THEME.styles
+
+
+# ── format_timestamp ─────────────────────────────────────────────────────────────
+
+
+class TestFormatTimestamp:
+    def test_valid_timestamp(self):
+        # 2024-01-01 00:00:00 UTC = 2024-01-01 08:00 Beijing
+        assert format_timestamp(1704067200) == "2024-01-01 08:00"
+
+    def test_none_returns_dash(self):
+        assert format_timestamp(None) == "—"
+
+    def test_zero_returns_dash(self):
+        assert format_timestamp(0) == "—"
+
+    def test_negative_returns_dash(self):
+        assert format_timestamp(-1) == "—"
+
+    def test_string_number(self):
+        assert format_timestamp("1704067200") == "2024-01-01 08:00"
+
+    def test_invalid_string(self):
+        assert format_timestamp("not-a-number") == "not-a-number"
+
+
+# ── html_to_rich ────────────────────────────────────────────────────────────────
+
+
+class TestHtmlToRichBold:
+    def test_bold(self):
+        result = html_to_rich('<p>This is <b>bold</b> text</p>')
+        assert len(result) >= 1
+        text = result[0]
+        assert "bold" in text.plain
+
+    def test_strong(self):
+        result = html_to_rich('<p>This is <strong>strong</strong> text</p>')
+        assert len(result) >= 1
+        assert "strong" in result[0].plain
+
+
+class TestHtmlToRichItalic:
+    def test_italic(self):
+        result = html_to_rich('<p>This is <i>italic</i> text</p>')
+        assert len(result) >= 1
+        assert "italic" in result[0].plain
+
+    def test_em(self):
+        result = html_to_rich('<p>This is <em>emphasized</em> text</p>')
+        assert len(result) >= 1
+        assert "emphasized" in result[0].plain
+
+
+class TestHtmlToRichLink:
+    def test_link_with_href(self):
+        result = html_to_rich('<a href="https://example.com">Example</a>')
+        text = result[0]
+        assert "Example" in text.plain
+        assert "example.com" in text.plain
+
+    def test_link_without_href(self):
+        result = html_to_rich('<a>No href</a>')
+        text = result[0]
+        assert "No href" in text.plain
+
+
+class TestHtmlToRichImage:
+    def test_image_with_alt(self):
+        result = html_to_rich('<img src="https://pic.zhihu.com/123.jpg" alt="架构图">')
+        text = result[0]
+        assert "架构图" in text.plain
+
+    def test_image_without_alt(self):
+        result = html_to_rich('<img src="https://pic.zhihu.com/123.jpg">')
+        text = result[0]
+        assert "图片" in text.plain
+
+
+class TestHtmlToRichCodeBlock:
+    def test_code_block(self):
+        result = html_to_rich('<pre><code class="language-python">print("hello")</code></pre>')
+        assert len(result) >= 1
+        # Syntax object should be in the result
+        from rich.syntax import Syntax
+        assert any(isinstance(r, Syntax) for r in result)
+
+    def test_code_block_auto_detect(self):
+        result = html_to_rich('<pre><code>print("hello")</code></pre>')
+        assert len(result) >= 1
+        from rich.syntax import Syntax
+        assert any(isinstance(r, Syntax) for r in result)
+
+
+class TestHtmlToRichParagraph:
+    def test_paragraphs_separated(self):
+        result = html_to_rich('<p>First paragraph</p><p>Second paragraph</p>')
+        combined = " ".join(r.plain for r in result)
+        assert "First" in combined
+        assert "Second" in combined
+
+
+class TestHtmlToRichInjection:
+    def test_bracket_text(self):
+        """User content with [brackets] should not crash."""
+        result = html_to_rich('<p>Use [code] tags for formatting</p>')
+        assert len(result) >= 1
+        assert "code" in result[0].plain
+
+    def test_empty_content(self):
+        result = html_to_rich("")
+        assert len(result) == 1
+        assert result[0].plain == ""
+
+    def test_none_content(self):
+        result = html_to_rich(None)
+        assert len(result) == 1
+        assert result[0].plain == ""
+
+
+class TestHtmlToRichTable:
+    def test_simple_table(self):
+        html = """
+        <table>
+            <tr><th>Name</th><th>Age</th></tr>
+            <tr><td>Alice</td><td>30</td></tr>
+            <tr><td>Bob</td><td>25</td></tr>
+        </table>
+        """
+        result = html_to_rich(html)
+        assert len(result) >= 1
+        from rich.table import Table
+        assert any(isinstance(r, Table) for r in result)
+
+
+class TestHtmlToRichList:
+    def test_unordered_list(self):
+        result = html_to_rich('<ul><li>Item 1</li><li>Item 2</li></ul>')
+        assert len(result) >= 1
+        assert "Item 1" in result[0].plain
+        assert "Item 2" in result[0].plain
+
+    def test_ordered_list(self):
+        result = html_to_rich('<ol><li>First</li><li>Second</li></ol>')
+        assert len(result) >= 1
+        assert "First" in result[0].plain
+        assert "Second" in result[0].plain
+
+
+class TestHtmlToRichBlockquote:
+    def test_blockquote(self):
+        result = html_to_rich('<blockquote>This is a quote</blockquote>')
+        assert len(result) >= 1
+        from rich.panel import Panel
+        assert any(isinstance(r, Panel) for r in result)

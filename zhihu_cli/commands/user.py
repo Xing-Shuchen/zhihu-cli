@@ -13,8 +13,10 @@ from ..display import (
     console,
     format_count,
     format_stats_line,
+    format_timestamp,
     make_kv_table,
     make_table,
+    print_answer_card,
     print_error,
     print_info,
     strip_html,
@@ -93,18 +95,13 @@ def user_answers(url_token: str, limit: int, as_json: bool):
             print_info("No answers found")
             return
 
-        table = make_table(f" Answers by @{url_token} ")
-        table.add_column("#", style="dim", width=4)
-        table.add_column("Question", ratio=1)
-        table.add_column("Upvotes", width=10, justify="right")
+        console.print()
+        console.print(f"[title]  Answers by @{url_token}  [/title]")
+        console.print()
 
         for i, ans in enumerate(data, 1):
-            q_title = strip_html(ans.get("question", {}).get("title", "—"))
-            upvotes = format_count(ans.get("voteup_count", 0))
-            table.add_row(str(i), q_title, f"[bold]{upvotes}[/bold]")
+            print_answer_card(i, ans)
 
-        console.print()
-        console.print(table)
         console.print()
 
 

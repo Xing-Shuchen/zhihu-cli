@@ -3,22 +3,29 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from contextlib import contextmanager
 
 import click
 
 from ..auth import cookie_str_to_dict, get_cookie_string
+from ..config import FEED_CACHE_FILE
 from ..display import (
     console,
     format_count,
     format_stats_line,
+    format_timestamp,
     make_table,
+    print_answer_card,
     print_error,
     print_hint,
+    print_html_content,
     print_info,
     strip_html,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -91,11 +98,12 @@ def search(query: str, search_type: str, limit: int, answers: int, as_json: bool
 
                 if ans_data:
                     for a in ans_data:
+                        a_id = a.get("id", "—")
                         a_author = a.get("author", {}).get("name", "—")
                         a_content = strip_html(a.get("excerpt", a.get("content", "")))
                         a_upvotes = format_count(a.get("voteup_count", 0))
                         console.print(
-                            f"    [dim]{a_author}:[/dim] {a_content}  [dim]{a_upvotes} upvotes[/dim]"
+                            f"    [dim]A#{a_id} {a_author}:[/dim] {a_content}  [dim]{a_upvotes} upvotes[/dim]"
                         )
 
         console.print()
@@ -148,11 +156,12 @@ def hot(limit: int, answers: int, as_json: bool):
 
                 if ans_data:
                     for a in ans_data:
+                        a_id = a.get("id", "—")
                         a_author = a.get("author", {}).get("name", "—")
                         a_excerpt = strip_html(a.get("excerpt", a.get("content", "")))
                         a_upvotes = format_count(a.get("voteup_count", 0))
                         console.print(
-                            f"    [dim]{a_author}:[/dim] {a_excerpt}  [dim]{a_upvotes} upvotes[/dim]"
+                            f"    [dim]A#{a_id} {a_author}:[/dim] {a_excerpt}  [dim]{a_upvotes} upvotes[/dim]"
                         )
                 else:
                     console.print("    [dim]No answers[/dim]")
@@ -220,21 +229,66 @@ def answers(question_id: int, limit: int, as_json: bool, sort_by: str):
             print_info("No answers yet")
             return
 
-        table = make_table(f" Answers — Q{question_id} ")
-        table.add_column("#", style="dim", width=4)
-        table.add_column("Author", width=14)
-        table.add_column("Excerpt", ratio=1)
-        table.add_column("Upvotes", width=10, justify="right")
+        console.print()
+        console.print(f"[title]  Answers — Q{question_id}  [/title]")
+        console.print()
 
         for i, ans in enumerate(data, 1):
-            author = ans.get("author", {}).get("name", "Anonymous")
-            excerpt = strip_html(ans.get("excerpt", ans.get("content", "—")))
-            upvotes = format_count(ans.get("voteup_count", 0))
-            table.add_row(str(i), author, excerpt, f"[bold]{upvotes}[/bold]")
+            print_answer_card(i, ans)
 
         console.print()
-        console.print(table)
-        console.print()
+
+
+def _display_answer(ans: dict):
+    """Print a formatted answer (metadata + content + stats)."""
+    answer_id = ans.get("id", "—")
+    author = ans.get("author", {})
+    author_name = author.get("name", "Anonymous")
+    author_token = author.get("url_token", "—")
+    author_id = author.get("id", "—")
+
+    question = ans.get("question", {})
+    question_id = question.get("id", "—")
+    question_title = strip_html(question.get("title", ""))
+
+    upvotes = format_count(ans.get("voteup_count", 0))
+    comments_cnt = format_count(ans.get("comment_count", 0))
+    created = format_timestamp(ans.get("created_time"))
+    updated = format_timestamp(ans.get("updated_time"))
+    content = ans.get("content", "")
+
+    console.print()
+    console.print(f"[title]  Answer #{answer_id}  [/title]")
+    console.print()
+
+    # Metadata block
+    meta_parts = [
+        f"by [accent]{author_name}[/accent]",
+        f"@{author_token}",
+        f"UID: {author_id}",
+    ]
+    console.print(f"  {'  ·  '.join(meta_parts)}")
+
+    if question_id != "—":
+        q_line = f"  [dim]Q#{question_id}[/dim]"
+        if question_title:
+            q_line += f"  {question_title}"
+        console.print(q_line)
+
+    time_parts = []
+    if created != "—":
+        time_parts.append(f"created: {created}")
+    if updated != "—" and updated != created:
+        time_parts.append(f"updated: {updated}")
+    if time_parts:
+        console.print(f"  [dim]{'  ·  '.join(time_parts)}[/dim]")
+
+    console.print()
+    print_html_content(content)
+    console.print()
+
+    console.print(f"  [dim]▲ {upvotes} upvotes  ·  💬 {comments_cnt} comments[/dim]")
+    console.print()
 
 
 @click.command()
@@ -255,21 +309,7 @@ def answer(answer_id: int, as_json: bool, comments: bool, limit: int):
             click.echo(json.dumps(ans, indent=2, ensure_ascii=False))
             return
 
-        author = ans.get("author", {}).get("name", "Anonymous")
-        content = strip_html(ans.get("content", "—"))
-
-        console.print()
-        console.print(f"[title]  Answer by {author}  [/title]")
-        console.print()
-        console.print(content)
-        console.print()
-
-        stats = format_stats_line({
-            "Upvotes": ans.get("voteup_count", 0),
-            "Comments": ans.get("comment_count", 0),
-        })
-        console.print(stats)
-        console.print()
+        _display_answer(ans)
 
         if comments:
             try:
@@ -301,9 +341,10 @@ def answer(answer_id: int, as_json: bool, comments: bool, limit: int):
                 return
 
             for i, c in enumerate(c_data, 1):
-                c_content = strip_html(c.get("content", ""))
                 c_likes = format_count(c.get("vote_count", 0))
-                console.print(f"  [dim]{i}.[/dim] {c_content}  [dim]{c_likes} likes[/dim]")
+                console.print(f"  [dim]{i}.[/dim] ", end="")
+                print_html_content(c.get("content", ""), indent="  ")
+                console.print(f"  [dim]{c_likes} likes[/dim]")
             console.print()
 
 
@@ -328,13 +369,21 @@ def feed(limit: int, as_json: bool):
             print_info("Feed is empty")
             return
 
+        # Cache feed data for `zhihu pick`
+        try:
+            FEED_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            FEED_CACHE_FILE.write_text(json.dumps(data, ensure_ascii=False))
+        except Exception as e:
+            logger.warning("Failed to cache feed: %s", e)
+
         table = make_table(" Recommended Feed ")
+        table.add_column("#", style="dim", width=4)
         table.add_column("ID", style="dim", min_width=12)
         table.add_column("Type", width=8)
         table.add_column("Title / Excerpt", ratio=1)
         table.add_column("Author", width=14)
 
-        for item in data:
+        for idx, item in enumerate(data, 1):
             target = item.get("target", {})
             item_type = target.get("type", "—")
             item_id = str(target.get("id", "—"))
@@ -344,15 +393,58 @@ def feed(limit: int, as_json: bool):
                 or strip_html(target.get("excerpt", "—"))
             )
             author = target.get("author", {}).get("name", "—")
-            table.add_row(item_id, item_type, title, author)
+            table.add_row(str(idx), item_id, item_type, title, author)
 
         console.print()
         console.print(table)
         console.print()
+        print_hint("Use `zhihu pick <number>` to view an answer")
 
 
 @click.command()
-@click.option("-l", "--limit", default=6, help="Number of feed items", show_default=True)
+@click.argument("index", type=int)
+def pick(index: int):
+    """View an answer from the last feed list by number."""
+    cache_file = FEED_CACHE_FILE
+    if not cache_file.exists():
+        print_error("No cached feed — run `zhihu feed` first")
+        sys.exit(1)
+
+    try:
+        data = json.loads(cache_file.read_text())
+    except Exception as e:
+        print_error(f"Failed to read feed cache: {e}")
+        sys.exit(1)
+
+    if not data:
+        print_info("Feed cache is empty")
+        return
+
+    if index < 1 or index > len(data):
+        print_error(f"Invalid number: {index} (choose 1-{len(data)})")
+        sys.exit(1)
+
+    item = data[index - 1]
+    target = item.get("target", {})
+    item_type = target.get("type", "—")
+    item_id = str(target.get("id", "—"))
+
+    if item_type != "answer":
+        print_error(f"Item #{index} is a '{item_type}', not an answer")
+        sys.exit(1)
+
+    with _get_client() as client:
+        try:
+            ans = client.get_answer(item_id)
+        except Exception as e:
+            print_error(f"Failed to fetch answer: {e}")
+            sys.exit(1)
+
+    _display_answer(ans)
+
+
+@click.command()
+@click.option("-l", "--limit", default=10, help="Number of feed items", show_default=True)
 @click.option("-c", "--comment-limit", default=10, help="Comments per item (0=hide)", show_default=True)
 def feeds(limit: int, comment_limit: int):
     """Show recommended feed with comments (推荐+评论)."""
@@ -378,24 +470,33 @@ def feeds(limit: int, comment_limit: int):
                 or strip_html(target.get("excerpt", "—"))
             )
             author = target.get("author", {}).get("name", "—")
+            author_token = target.get("author", {}).get("url_token", "—")
 
             console.print()
             console.print(
                 f"[title]  {idx}. [{item_type}] {title}  [/title]"
             )
-            console.print(f"  [dim]ID: {item_id}  Author: {author}[/dim]")
 
             if item_type == "answer":
+                console.print(f"  [dim]A#{item_id}  by {author}  @{author_token}[/dim]")
                 try:
                     ans = client.get_answer(item_id)
-                    content = strip_html(ans.get("content", ""))
+                    q = ans.get("question", {})
+                    q_id = q.get("id", "—")
+                    q_title = strip_html(q.get("title", ""))
+                    if q_id != "—":
+                        q_line = f"  [dim]Q#{q_id}[/dim]"
+                        if q_title:
+                            q_line += f"  {q_title}"
+                        console.print(q_line)
+                    print_html_content(ans.get("content", ""))
                 except Exception:
-                    content = strip_html(target.get("excerpt", ""))
+                    print_html_content(target.get("excerpt", ""))
             else:
+                console.print(f"  [dim]ID: {item_id}  Author: {author}[/dim]")
                 content = strip_html(target.get("content", target.get("excerpt", "")))
-
-            if content:
-                console.print(f"  {content}")
+                if content:
+                    console.print(f"  {content}")
 
             if comment_limit > 0 and item_type == "answer":
                 try:
@@ -406,11 +507,10 @@ def feeds(limit: int, comment_limit: int):
 
                 if c_data:
                     for i, c in enumerate(c_data, 1):
-                        c_content = strip_html(c.get("content", ""))
                         c_likes = format_count(c.get("vote_count", 0))
-                        console.print(
-                            f"    [dim]{i}.[/dim] {c_content}  [dim]{c_likes} likes[/dim]"
-                        )
+                        console.print(f"    [dim]{i}.[/dim] ", end="")
+                        print_html_content(c.get("content", ""))
+                        console.print(f"    [dim]{c_likes} likes[/dim]")
                 else:
                     console.print("    [dim]No comments[/dim]")
 

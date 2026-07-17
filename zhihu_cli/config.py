@@ -9,6 +9,8 @@ CONFIG_DIR = Path.home() / ".zhihu-cli"
 COOKIE_FILE = CONFIG_DIR / "cookies.json"
 # QR code image path for AI Agent (e.g. OpenClaw) to send to user for scan login
 QRCODE_IMAGE_PATH = CONFIG_DIR / "login_qrcode.png"
+# Feed cache so `zhihu pick` can access the last feed list
+FEED_CACHE_FILE = CONFIG_DIR / "feed_cache.json"
 
 # Required cookies for API requests (z_c0 = auth token; _xsrf = CSRF; d_c0 = device)
 REQUIRED_COOKIES = frozenset({"z_c0", "_xsrf", "d_c0"})

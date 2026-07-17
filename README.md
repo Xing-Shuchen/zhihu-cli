@@ -29,10 +29,10 @@
 | 分类       | 命令                                     | 说明                           |
 |------------|------------------------------------------|--------------------------------|
 | Auth       | login, logout, status, whoami            | 登录、退出、状态检查、查看资料 |
-| Read       | search, hot, question, answer            | 搜索、热榜、问题详情、回答详情 |
+| Read       | search, hot, question, answer, pick      | 搜索、热榜、问题详情、回答详情、从 Feed 列表选择回答 |
 | Users      | user, user-answers, user-articles        | 查看资料、回答列表、文章列表   |
 | Social     | followers, following                     | 查看粉丝、关注列表             |
-| Feed       | feed, feeds, topic                      | 推荐 Feed、推荐+评论、话题详情 |
+| Feed       | feed, feeds, topic                       | 推荐 Feed、推荐+评论、话题详情 |
 | Interact   | vote, follow-question                    | 赞同回答、关注问题             |
 | Create     | ask, pin, article                        | 发布提问、发布想法、发布文章（图文混合，富文本支持）     |
 | Delete     | delete-question, delete-pin, delete-article | 删除自己的提问、想法、文章（需确认，可 -y 跳过） |
@@ -160,9 +160,12 @@ zhihu following <url_token>
 ### 推荐 & 话题
 
 ```bash
-# 推荐列表（仅 ID、类型、标题、作者）
+# 推荐列表（仅 ID、类型、标题、作者），自动缓存供 pick 使用
 zhihu feed
 zhihu feed --limit 5
+
+# 从最近一次 feed 缓存中按编号查看回答（无需复制 ID）
+zhihu pick 3
 
 # 推荐 + 回答内容 + 评论
 zhihu feeds
@@ -264,6 +267,7 @@ zhihu_cli/
 - 用户查询使用 URL Token（即知乎个人主页的路径部分，如 `zhihu.com/people/xxx` 中的 `xxx`）
 - 二维码登录使用知乎官方 API，无需安装 Playwright
 - 浏览器指纹版本号集中管理于 `config.py` 的 `CHROME_VERSION`，修改一处即可全局生效
+- `--json` 输出的回答对象新增了 `id`、`question`、`author.url_token` 等字段（来自 API `include` 参数扩展），不影响已有字段的解析
 
 ## 网络安全设计
 

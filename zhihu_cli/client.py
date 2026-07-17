@@ -169,8 +169,8 @@ class ZhihuClient:
         url = f"{ZHIHU_API_V4}/questions/{question_id}/answers"
         params = {
             "include": (
-                "data[*].content,voteup_count,comment_count,"
-                "created_time,updated_time,author"
+                "data[*].id,content,voteup_count,comment_count,"
+                "created_time,updated_time,author,question"
             ),
             "offset": offset,
             "limit": limit,
@@ -227,8 +227,8 @@ class ZhihuClient:
         url = f"{ZHIHU_API_V4}/members/{url_token}/answers"
         params = {
             "include": (
-                "data[*].content,voteup_count,comment_count,"
-                "created_time,question"
+                "data[*].id,content,voteup_count,comment_count,"
+                "created_time,updated_time,author,question"
             ),
             "offset": offset,
             "limit": limit,

@@ -28,7 +28,9 @@ dependencies = [
     "qrcode>=7.4",
     "click>=8.0",
     "rich>=13.0",
-    "pillow>=12.1.1",
+    "pillow>=10.0",
+    "beautifulsoup4>=4.12",
+    "pygments>=2.17",
 ]
 
 [project.urls]
