@@ -137,6 +137,27 @@ zhihu answer <answer_id> -c
 
 # 限制评论数量
 zhihu answer <answer_id> -c -l 5
+
+# 图片控制（默认 auto）
+zhihu answer <answer_id> --media auto
+zhihu answer <answer_id> --media off
+```
+
+`answer` 和 `pick` 会在 Kitty 终端中自动渲染回答及评论里的图片。`--media` 支持 `auto`、`on`、`off`：默认 `auto` 会在终端不支持图片或输出被重定向时回退为图片说明和 URL。只有知乎官方域名的图片会被下载；第三方图片会保留安全提示和 URL。
+
+图片只按终端宽度等比缩小，不限制显示高度，也不限制回答中的图片数量。单张图片最大 20 MB；缓存位于 `/tmp/zhihu-cli-<uid>/media`，最大 10 GB、最长保留 30 天，并可能被系统提前清理。GIF 在 Kitty 支持时保持动画。
+
+在 tmux 3.3 及以上版本中，需要允许 Kitty 图片协议穿透：
+
+```tmux
+# ~/.tmux.conf
+set -g allow-passthrough on
+```
+
+然后执行：
+
+```bash
+tmux source-file ~/.tmux.conf
 ```
 
 ### 问题回答列表
@@ -286,19 +307,19 @@ zhihu_cli/
 
 本工具在设计与实现上遵循以下安全原则，以降低凭证与隐私风险：
 
-- **凭证仅存本地**  
+- **凭证仅存本地**
   登录态（Cookie）仅写入用户本机 `~/.zhihu-cli/cookies.json`，文件权限为 `0600`（仅当前用户可读写）。程序不会将 Cookie 或任何登录凭证上传至本工具维护方或第三方服务。
 
-- **全程 HTTPS**  
+- **全程 HTTPS**
   所有与知乎的通信均使用 HTTPS，请求仅发往知乎官方域名（如 `www.zhihu.com`、`api.zhihu.com`），避免凭证或内容在网络上明文传输。
 
-- **无密码落地**  
+- **无密码落地**
   支持两种登录方式：二维码扫码（调用知乎官方登录 API，由用户在手机端完成授权）和手动粘贴 Cookie。本工具不收集、不存储账号密码。
 
-- **最小权限与最小请求**  
+- **最小权限与最小请求**
   仅请求完成当前命令所需的知乎 API，不额外拉取或上报用户数据；Cookie 仅用于向知乎证明身份，不用于其他用途。
 
-- **可审计与可复现**  
+- **可审计与可复现**
   项目开源，依赖列表在 `pyproject.toml` 中声明，无混淆或闭源运行时；用户可自行审查代码与依赖，或在隔离环境中安装运行。
 
 建议仅在可信环境中使用本工具，并妥善保管本地 Cookie 文件；通过 `zhihu logout` 可清除本地保存的登录态。
@@ -324,6 +345,6 @@ twine upload dist/*
 - 首次上传需在 [PyPI](https://pypi.org) 注册并配置 API Token；使用 token 时用户名填 `__token__`，密码填 token 值。
 - 若使用 TestPyPI 测试：`twine upload --repository testpypi dist/*`
 
-## License
+## Licenee
 
 Apache License 2.0

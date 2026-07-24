@@ -17,7 +17,6 @@ from ..display import (
     format_stats_line,
     format_timestamp,
     make_table,
-    print_answer_card,
     print_error,
     print_hint,
     print_html_content,
@@ -25,6 +24,7 @@ from ..display import (
     strip_html,
     truncate,
 )
+from ..rendering import DocumentRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +279,12 @@ def answers(question_id: int, limit: int, page: int, as_json: bool, sort_by: str
         console.print()
 
 
-def _display_answer(ans: dict):
+def _display_answer(
+    ans: dict,
+    *,
+    media: str = "auto",
+    renderer: DocumentRenderer | None = None,
+):
     """Print a formatted answer (metadata + content + stats)."""
     answer_id = ans.get("id", "—")
     author = ans.get("author", {})
@@ -324,7 +329,7 @@ def _display_answer(ans: dict):
         console.print(f"  [dim]{'  ·  '.join(time_parts)}[/dim]")
 
     console.print()
-    print_html_content(content)
+    print_html_content(content, media=media, renderer=renderer)
     console.print()
 
     console.print(f"  [dim]▲ {upvotes} upvotes  ·  💬 {comments_cnt} comments[/dim]")
@@ -336,7 +341,14 @@ def _display_answer(ans: dict):
 @click.option("--json", "as_json", is_flag=True, help="Output raw JSON")
 @click.option("-c", "--comments", is_flag=True, help="Show comments")
 @click.option("-l", "--limit", default=0, help="Number of comments (0=all)", show_default=True)
-def answer(answer_id: int, as_json: bool, comments: bool, limit: int):
+@click.option(
+    "--media",
+    default="auto",
+    type=click.Choice(["auto", "on", "off"]),
+    show_default=True,
+    help="Render answer images",
+)
+def answer(answer_id: int, as_json: bool, comments: bool, limit: int, media: str):
     """Read a specific answer."""
     with _get_client() as client:
         try:
@@ -349,7 +361,8 @@ def answer(answer_id: int, as_json: bool, comments: bool, limit: int):
             click.echo(json.dumps(ans, indent=2, ensure_ascii=False))
             return
 
-        _display_answer(ans)
+        renderer = DocumentRenderer(console=console) if media != "off" else None
+        _display_answer(ans, media=media, renderer=renderer)
 
         if comments:
             try:
@@ -383,7 +396,12 @@ def answer(answer_id: int, as_json: bool, comments: bool, limit: int):
             for i, c in enumerate(c_data, 1):
                 c_likes = format_count(c.get("vote_count", 0))
                 console.print(f"  [dim]{i}.[/dim] ", end="")
-                print_html_content(c.get("content", ""), indent="  ")
+                print_html_content(
+                    c.get("content", ""),
+                    indent="  ",
+                    media=media,
+                    renderer=renderer,
+                )
                 console.print(f"  [dim]{c_likes} likes[/dim]")
             console.print()
 
@@ -443,7 +461,14 @@ def feed(limit: int, as_json: bool):
 
 @click.command()
 @click.argument("index", type=int)
-def pick(index: int):
+@click.option(
+    "--media",
+    default="auto",
+    type=click.Choice(["auto", "on", "off"]),
+    show_default=True,
+    help="Render answer images",
+)
+def pick(index: int, media: str):
     """View an answer from the last feed or answers list by number."""
     cache_file = FEED_CACHE_FILE
     if not cache_file.exists():
@@ -482,7 +507,8 @@ def pick(index: int):
             print_error(f"Failed to fetch answer: {e}")
             sys.exit(1)
 
-    _display_answer(ans)
+    renderer = DocumentRenderer(console=console) if media != "off" else None
+    _display_answer(ans, media=media, renderer=renderer)
 
 
 @click.command()

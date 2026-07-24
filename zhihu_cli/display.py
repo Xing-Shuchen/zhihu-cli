@@ -455,13 +455,27 @@ def html_to_rich(html_content: str) -> list:
     return renderables
 
 
-def print_html_content(html_content: str, *, indent: str = ""):
+def print_html_content(
+    html_content: str,
+    *,
+    indent: str = "",
+    media: str = "off",
+    renderer=None,
+):
     """Print HTML content with full Rich formatting.
 
     Args:
         html_content: Raw HTML string from Zhihu API.
         indent: Optional indentation prefix (e.g. ``'  '``).
     """
+    if media != "off":
+        from .rendering import DocumentRenderer
+
+        (renderer or DocumentRenderer(console=console)).render(
+            html_content, media=media, indent=indent, is_tty=console.is_terminal
+        )
+        return
+
     renderables = html_to_rich(html_content)
     for item in renderables:
         if isinstance(item, Text) and indent:
